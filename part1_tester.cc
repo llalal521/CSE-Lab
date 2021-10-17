@@ -130,8 +130,10 @@ int test_indirect()
                 return 2;
             }
             if (buf.compare(content[i]) != 0) {
-                std::cout << "error get large file, not consistent with put large file : " << 
-                    buf << " <-> " << content[i] << "\n";
+                std::cout << "error get large file, not consistent with put large file : " 
+                // << 
+                //     buf << " <-> " << content[i] 
+                    << "\n";
                 return 3;
             }
         }
