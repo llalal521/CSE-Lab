@@ -1,4 +1,5 @@
 #include "inode_manager.h"
+#include "gettime.h"
 
 // disk layer -----------------------------------------
 
@@ -10,28 +11,16 @@ disk::disk()
 void
 disk::read_block(blockid_t id, char *buf, int size)
 {
-  unsigned char *block = blocks[id];
-  uint32_t block_cursor = 0;
-  while(block_cursor < size){
-  *buf = *block;
-  block++;
-  buf++;
-  block_cursor++;
-  }
+  memcpy(buf, blocks[id], size);
+  return;
 }
 
 
 void
 disk::write_block(blockid_t id, const char *buf, int size)
 {
-  unsigned char *block = blocks[id];
-  uint32_t block_cursor = 0;
-  while(block_cursor < size){
-    *block = *buf;
-    block ++;
-    buf ++;
-    block_cursor ++;
-  }
+  memcpy(blocks[id], buf, size);
+  return;
 }
 
 // block layer -----------------------------------------
@@ -84,7 +73,7 @@ block_manager::free_block(uint32_t id)
   uint32_t offset = id % BPB;
   uint32_t mask = ~(1 << (offset % 8));
   buf[offset/8] = buf[offset/8] & mask;
-  write_block(BBLOCK(id), buf), BLOCK_SIZE;
+  write_block(BBLOCK(id), buf, BLOCK_SIZE);
   return;
 }
 
@@ -136,7 +125,6 @@ inode_manager::inode_manager()
     printf("\tim: error! alloc first inode %d, should be 1\n", root_dir);
     exit(0);
   }
-  // bm->write_block(10, (char *) busy_list, BLOCK_SIZE);
 }
 
 /* Create a new file.
@@ -150,6 +138,7 @@ inode_manager::alloc_inode(uint32_t type)
    * the 1st is used for root_dir, see inode_manager::inode_manager().
    */
   char buf[BLOCK_SIZE];
+
 
   uint32_t inodeNum;
   /* Check every inodeBlock */
@@ -200,14 +189,14 @@ inode_manager::get_inode(uint32_t inum)
   struct inode *ino, *ino_disk;
   char buf[BLOCK_SIZE] = {'\0'};
 
-  printf("\tim: get_inode %d\n", inum);
+  //printf("\tim: get_inode %d\n", inum);
 
   if (inum < 0 || inum >= INODE_NUM) {
     printf("\tim: inum out of range\n");
     return NULL;
   }
-
-  bm->read_block(IBLOCK(inum, bm->sb.nblocks), buf);
+  int a = IBLOCK(inum, bm->sb.nblocks);
+  bm->read_block(a, buf);
   // printf("%s:%d\n", __FILE__, __LINE__);
 
   ino_disk = (struct inode*)buf + inum%IPB;
@@ -228,7 +217,7 @@ inode_manager::put_inode(uint32_t inum, struct inode *ino)
   char buf[BLOCK_SIZE] = {'\0'};
   struct inode *ino_disk;
 
-  printf("\tim: put_inode %d\n", inum);
+  //printf("\tim: put_inode %d\n", inum);
   if (ino == NULL)
     return;
 
@@ -250,123 +239,42 @@ inode_manager::read_file(uint32_t inum, char **buf_out, int *size)
    * note: read blocks related to inode number inum,
    * and copy them to buf_out
    */
+  std::cout << "inode read " << inum << std::endl;
   inode_t *inode_i = get_inode(inum);
+  *size = inode_i->size;
+  int record = inode_i->size / BLOCK_SIZE + 1;
   blockid_t *block_num = inode_i->blocks;
-  int tmp_size = 0;
-  int record = 0;
   int *Array = NULL;
-  std::string truncate_tail = "";
-  bool truncate_symbol = false;
-  std::string truncate_result = "";
-  std::cout << "here" << std::endl;
-  for(uint32_t i = 0; i <= NDIRECT; ++i){
-    if(i < NDIRECT && block_num[i] != 0){
-      if(inum < 18)
-        printf("%d ", block_num[i]);
-      record++;
-      }
-    if(i == NDIRECT && block_num[i] != 0){ //deal with indirect inode
-      char buf[BLOCK_SIZE] = {'\0'};
-      bm->read_block(block_num[i], buf); //get the int array
-      Array = (int *)buf;
-      printf("\n block%d \n", block_num[i]);
-      for(uint32_t j = 0; j < NINDIRECT; ++j){
-        if(Array[j] != 0){
-          printf("%d ", Array[j]);
-          record++;
-        }
-      }
-    }
+  if(block_num[NDIRECT] != 0){
+    char buf[BLOCK_SIZE] = {'\0'};
+    bm->read_block(block_num[NDIRECT], buf); //get the int array
+    Array = (int *)buf;
   }
-  std::cout << "record " << record;
+  // std::cout << inum << "read execute ::" << stop - start << std::endl;
   char *result = new char[record * BLOCK_SIZE];
   *buf_out = result;
   for(uint32_t i = 0; i <= NDIRECT; ++i){
     if(i < NDIRECT && block_num[i] != 0){
       char *tmp = result + i * BLOCK_SIZE;
       bm->read_block(block_num[i], tmp);
-      if(block_num[i+1] != 0){
-        tmp_size = tmp_size + BLOCK_SIZE;
-      }
-      else 
-      for(uint32_t i = 0; i < BLOCK_SIZE; ++i){
-        if(i == BLOCK_SIZE - 1){
-          if(*tmp != '\0')
-            tmp_size ++;
-          else
-            continue;
-        }
-        else{
-          if(*tmp != '\0'){
-            tmp ++;
-            tmp_size++;
-            truncate_symbol = false;
-            if(*tmp == '\0')
-              truncate_symbol = true;
-          }
-          else{
-            if(truncate_symbol){
-              truncate_tail.push_back(*tmp);
-              if(*(tmp+1) != '\0'){
-                truncate_symbol = false;
-                truncate_result.append(truncate_tail);
-                truncate_tail.clear();
-              }
-              tmp ++;
-            }
-          }
-        }
-      }
     }
     if(i == NDIRECT && block_num[i] != 0){ //deal with indirect inode
       for(uint32_t j = 0; j < NINDIRECT; ++j){
         if(Array[j] != 0){
           char *tmp = result + (100+j) * BLOCK_SIZE;
           bm->read_block(Array[j], tmp);
-          if(j != NINDIRECT && Array[j+1] != 0)
-            tmp_size = tmp_size + BLOCK_SIZE;
-          else  
-          for(uint32_t i = 0; i < BLOCK_SIZE; ++i){
-            if(i == BLOCK_SIZE - 1){
-              if(*tmp != '\0')
-                tmp_size ++;
-              else
-                continue;
-            }
-            else{
-              if(*tmp != '\0'){
-                tmp ++;
-                tmp_size++;
-                truncate_symbol = false;
-                if(*tmp == '\0')
-                  truncate_symbol = true;
-              }
-              else{
-                if(truncate_symbol){
-                  truncate_tail.push_back(*tmp);
-                  if(*(tmp+1) != '\0'){
-                    truncate_symbol = false;
-                    truncate_result.append(truncate_tail);
-                    truncate_tail.clear();
-                  }
-                  tmp ++;
-                }
-              }
-            }
-          }
         }
       }
     }
   }
-  printf("\n");
   struct timespec ts;
   clock_gettime(CLOCK_REALTIME, &ts);
   inode_i->ctime = ts.tv_sec;
   inode_i->atime = ts.tv_sec;
   put_inode(inum, inode_i);
-  delete inode_i;
-  *size = tmp_size + truncate_result.size();
-  std::cout << "size " << *size;
+  std::cout << "inode finish read " << inum << std::endl;
+  free(inode_i);
+  return;
 }
 
 /* alloc/free blocks if needed */
@@ -389,8 +297,7 @@ inode_manager::write_file(uint32_t inum, const char *buf, int size)
     return;
   blockid_t *block_num = inode_i->blocks;
   uint32_t num = size / BLOCK_SIZE + 1;
-  uint32_t current_num = inode_i->size / BLOCK_SIZE + 1;
-  std::cout << size << ' ' << inode_i->size << std::endl;
+  uint32_t current_num = inode_i->size/ BLOCK_SIZE + 1;
   int *Array = NULL;
   char char_array[BLOCK_SIZE] = {'\0'};
   bool type = false;
@@ -439,7 +346,6 @@ inode_manager::write_file(uint32_t inum, const char *buf, int size)
       if(i < 100){
         if(block_num[i] == 0){
           block_num[i] = bm->alloc_block();
-          std::cout << block_num[i] ;
         }
       }
       else{
@@ -501,20 +407,15 @@ inode_manager::getattr(uint32_t inum, extent_protocol::attr &a)
    * you can refer to "struct attr" in extent_protocol.h
    */
   inode_t *inode = get_inode(inum);
-  if(inode == NULL){
-    a.type = 0;
-    a.size = 0;
-    a.mtime = 0;
-    a.ctime = 0;
-    a.atime = 0;
-  }
-  else{
-    a.type = uint32_t(inode->type);
-    a.size = inode->size;
+  if (inode) {
+    a.type = inode->type;
+    a.atime = inode->atime;
     a.mtime = inode->mtime;
     a.ctime = inode->ctime;
-    a.atime = inode->atime;
+    a.size = inode->size;
+    free(inode);
   }
+  std::cout << "inode getattr " << inum << std::endl;
 }
 
 void

@@ -45,10 +45,12 @@ getattr(chfs_client::inum inum, struct stat &st)
     bzero(&st, sizeof(st));
 
     st.st_ino = inum;
-    printf("getattr %016llx %d\n", inum, chfs->isfile(inum));
-    if(chfs->isfile(inum)){
+    //printf("getattr %016llx %d\n", inum, chfs->isfile(inum));
+    extent_protocol:: attr a;
+    a = chfs->getattr(inum);
+    if(a.type == extent_protocol::T_FILE){
         chfs_client::fileinfo info;
-        ret = chfs->getfile(inum, info);
+        ret = chfs->getfile(inum, info, a);
         if(ret != chfs_client::OK)
             return ret;
         st.st_mode = S_IFREG | 0666;
@@ -59,9 +61,9 @@ getattr(chfs_client::inum inum, struct stat &st)
         st.st_size = info.size;
         printf("   getattr -> %llu\n", info.size);
     } 
-    if(chfs->isdir(inum)){
+    if(a.type == extent_protocol::T_DIR){
         chfs_client::dirinfo info;
-        ret = chfs->getdir(inum, info);
+        ret = chfs->getdir(inum, info, a);
         if(ret != chfs_client::OK)
             return ret;
         st.st_mode = S_IFDIR | 0777;
@@ -71,9 +73,9 @@ getattr(chfs_client::inum inum, struct stat &st)
         st.st_ctime = info.ctime;
         printf("   getattr -> %lu %lu %lu\n", info.atime, info.mtime, info.ctime);
     }
-    if(chfs->issymlink(inum)){
+    if(a.type == extent_protocol::T_Sym){
         chfs_client::fileinfo info;
-        ret = chfs->getfile(inum, info);
+        ret = chfs->getfile(inum, info, a);
         if(ret != chfs_client::OK)
             return ret;
         st.st_mode = S_IFLNK | 0777;
@@ -189,12 +191,17 @@ fuseserver_read(fuse_req_t req, fuse_ino_t ino, size_t size,
     chfs_client::status ret;
     chfs_client::inum inum = ino;
     std::string read_buf = "";
+    struct timespec ts;
+    struct timespec ts1;
+    clock_gettime(CLOCK_REALTIME, &ts1);
     ret = chfs->read(inum, size, off, read_buf);
     if(ret != chfs_client::OK){
         fuse_reply_err(req, ENOENT);
         return;
     }
     fuse_reply_buf(req, read_buf.c_str(), read_buf.size());
+    clock_gettime(CLOCK_REALTIME, &ts);
+    std::cout << "fuse read "<< ino << ' ' << ts.tv_nsec + ts.tv_sec * 1000000000 - ts1.tv_nsec - ts1.tv_sec * 1000000000 << std::endl;
     // Change the above "#if 0" to "#if 1", and your code goes here
 #else
     fuse_reply_err(req, ENOSYS);
@@ -233,7 +240,6 @@ fuseserver_write(fuse_req_t req, fuse_ino_t ino,
         std :: cout << "WRONG" << std::endl;
         return;
     }
-    std :: cout << bytes_written << std::endl;
     fuse_reply_write(req, bytes_written);
     // Change the above line to "#if 1", and your code goes here
 #else
@@ -331,6 +337,8 @@ fuseserver_lookup(fuse_req_t req, fuse_ino_t parent, const char *name)
 
     chfs_client::inum ino;
     chfs->lookup(parent, name, found, ino);
+
+    std::cout << "look up for "<< name << " in " << parent << std::endl;
 
     if (found) {
         e.ino = ino;

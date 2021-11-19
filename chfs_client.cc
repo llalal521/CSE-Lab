@@ -45,6 +45,8 @@ chfs_client::isfile(inum inum)
         return false;
     }
 
+    // std::cout << "isfile get attr" << std::endl;
+
     if (a.type == extent_protocol::T_FILE) {
         printf("isfile: %lld is a file\n", inum);
         return true;
@@ -68,6 +70,8 @@ chfs_client::issymlink(inum inum)
         return false;
     }
 
+    // std::cout << "issymbol get attr" << std::endl;
+
     if (a.type == extent_protocol::T_Sym) {
         printf("isdir: %lld is a dir\n", inum);
         return true;
@@ -86,6 +90,8 @@ chfs_client::isdir(inum inum)
         return false;
     }
 
+    // std::cout << "isdir get attr" << std::endl;
+
     if (a.type == extent_protocol::T_DIR) {
         printf("isdir: %lld is a dir\n", inum);
         return true;
@@ -95,16 +101,18 @@ chfs_client::isdir(inum inum)
 }
 
 int
-chfs_client::getfile(inum inum, fileinfo &fin)
+chfs_client::getfile(inum inum, fileinfo &fin, extent_protocol::attr a)
 {
     int r = OK;
 
-    printf("getfile %016llx\n", inum);
-    extent_protocol::attr a;
-    if (ec->getattr(inum, a) != extent_protocol::OK) {
-        r = IOERR;
-        goto release;
-    }
+    //printf("getfile %016llx\n", inum);
+
+    // if (ec->getattr(inum, a) != extent_protocol::OK) {
+    //     r = IOERR;
+    //     goto release;
+    // }
+
+    // std::cout << "getfile get attr" << std::endl;
 
     fin.atime = a.atime;
     fin.mtime = a.mtime;
@@ -117,22 +125,30 @@ release:
 }
 
 int
-chfs_client::getdir(inum inum, dirinfo &din)
+chfs_client::getdir(inum inum, dirinfo &din, extent_protocol::attr a)
 {
     int r = OK;
 
     printf("getdir %016llx\n", inum);
-    extent_protocol::attr a;
-    if (ec->getattr(inum, a) != extent_protocol::OK) {
-        r = IOERR;
-        goto release;
-    }
+    // extent_protocol::attr a;
+    // if (ec->getattr(inum, a) != extent_protocol::OK) {
+    //     r = IOERR;
+    //     goto release;
+    // }
+    // std::cout << "getdir get attr" << std::endl;
     din.atime = a.atime;
     din.mtime = a.mtime;
     din.ctime = a.ctime;
 
 release:
     return r;
+}
+
+extent_protocol::attr
+chfs_client::getattr(inum inum){
+    extent_protocol::attr a;
+    ec->getattr(inum, a);
+    return a;
 }
 
 
@@ -181,18 +197,8 @@ chfs_client::create(inum parent, const char *name, mode_t mode, inum &ino_out)
      */
     ec->create(extent_protocol::T_FILE, ino_out);
     ec->get(parent, buf);
-    std::string filename_string = "";
-    std::string inum_string = "";
-    while(*name != '\0'){
-        filename_string.push_back(*name);
-        name++;
-    }
-    inum_string = filename(ino_out);
-    filename_string.push_back('/');
-    inum_string.push_back('/');
-    filename_string.append(inum_string);
-    buf.append(filename_string);
-    //std::cout << filename_string;
+    std::string entry = std::string(name) + '/' + filename(ino_out) + '/';
+    buf.append(entry);
     ec->put(parent, buf);
     return r;
 }
@@ -203,23 +209,14 @@ chfs_client::mkdir(inum parent, const char *name, mode_t mode, inum &ino_out)
     int r = OK;
     bool found = false;
     std::string parent_buf = "";
-    std::string inum_string = "";
-    std::string filename_string = "";
     r = lookup(parent, name, found, ino_out);
     if(found){
         return EXIST;
     }
     ec->create(extent_protocol::T_DIR, ino_out);
-    while(*name != '\0'){
-        filename_string.push_back(*name);
-        name++;
-    }
-    inum_string = filename(ino_out);
     ec->get(parent, parent_buf);
-    filename_string.push_back('/');
-    inum_string.push_back('/');
-    parent_buf.append(filename_string);
-    parent_buf.append(inum_string);
+    std::string entry = std::string(name) + '/' + filename(ino_out) + '/';
+    parent_buf.append(entry);
     ec->put(parent, parent_buf);
     /*
      * your code goes here.
@@ -234,46 +231,40 @@ int
 chfs_client::lookup(inum parent, const char *name, bool &found, inum &ino_out)
 {
     int r = OK;
+
     /*
-     * your code goes here.
+     * your lab2 code goes here.
      * note: lookup file from parent dir according to name;
      * you should design the format of directory content.
      */
-    std::cout << name;
-    std::string dir = "";
-    ec->get(parent, dir);
-    std::string filename = "";
-    std::string judge_string = "";
-    std::string inum_string = "";
-    //std::cout << dir << std::endl;
-    bool isname = true;
-    for(size_t i = 0; i < dir.size(); ++i){
-        if(isname){
-            if(dir[i] == '/'){
-                isname = false;
-                if(!filename.compare(name)){
-                    found = true;
-                }
-                //std::cout << filename << std::endl;
-                filename.clear();
-                continue;
-            }
-            filename.push_back(dir[i]);
-        }
-        else{
-            if(dir[i] == '/'){
-                if(found){
-                    ino_out = n2i(inum_string);
-                    std :: cout << "inum: " << inum_string << std::endl;
-                    return EXIST;
-                }
-                isname = true;
-                inum_string.clear();
-                continue;
-            }
-            inum_string.push_back(dir[i]);
-        }
+
+    found = false;
+    /* Judge whether parent exists */
+    if (!isdir(parent)) {
+        return r;
     }
+
+    /* Read parent dir */
+    std::list<chfs_client::dirent> entries;
+    r = chfs_client::readdir(parent, entries);
+    if (r != OK) {
+        printf("Wrong in lookup\n");
+        return r;
+    }
+
+    /* Lookup file by name */
+    std::list<chfs_client::dirent>::iterator it = entries.begin();
+    while (it != entries.end()) {
+        std::string filename = it->name;
+        if (filename == std::string(name)) {
+            found = true;
+            ino_out = it->inum;
+            r = EXIST;
+            return r;
+        }
+        it++;
+    }
+
     return r;
 }
 
@@ -283,39 +274,46 @@ chfs_client::readdir(inum dir, std::list<dirent> &list)
     int r = OK;
 
     /*
-     * your code goes here.
+     * your lab2 code goes here.
      * note: you should parse the dirctory content using your defined format,
      * and push the dirents to the list.
      */
-    std::string buf = "";
-    ec->get(dir, buf);
-    std::string filename = "";
-    std::string judge_string = "";
-    dirent *content_dirent = new dirent();
-    std::string inum_string = "";
-    bool isname = true;
-    for(size_t i = 0; i < buf.size(); ++i){
-        if(isname){
-            if(buf[i] == '/'){
-                isname = false;
-                content_dirent->name = filename;
-                // std::cout << filename << std::endl;
-                filename.clear();
-                continue;
-            }
-            filename.push_back(buf[i]);
-        }
-        else{
-            if(buf[i] == '/'){
-                content_dirent->inum = n2i(inum_string);
-                list.push_back(*content_dirent);
-                isname = true;
-                inum_string.clear();
-                continue;
-            }
-            inum_string.push_back(buf[i]);
-        }
+
+    /* 
+     * Use '/' as the seperator, 
+     * A typical dirent is filename/inum/
+     * Thus, '/' is not allowed in filename 
+     */ 
+
+    /* Read buf from block */
+    std::string buf;
+    r = ec->get(dir, buf);
+    if (r != OK) {
+        printf("Wrong in readdir\n");
+        return r;
     }
+
+    /* Get directory entries */
+    unsigned int head = 0;
+    unsigned int tail = 0;
+    struct dirent *entry = new dirent(); 
+    while (head < buf.size()) {
+        /* Get name */
+        tail = buf.find('/', head);
+        std::string name = buf.substr(head, tail - head);
+        entry->name = name;
+        head = tail + 1;
+
+        /* Get inum */
+        tail = buf.find('/', head);
+        std::string inum = buf.substr(head, tail - head);
+        entry->inum = n2i(inum);
+        head = tail + 1;
+
+        list.push_back(*entry);
+    }
+    delete entry;
+
     return r;
 }
 
@@ -332,11 +330,6 @@ chfs_client::read(inum ino, size_t size, off_t off, std::string &data)
         if(read_count == size)
             break;
     }
-    /*
-     * your code goes here.
-     * note: read using ec->get().
-     */
-
     return r;
 }
 
@@ -347,9 +340,9 @@ chfs_client::write(inum ino, size_t size, off_t off, const char *data,
     int r = OK;
     std::string read_buf = "";
     std::string write_buf = "";
-    extent_protocol::attr a;
-    r = ec->getattr(ino, a);
-    r = ec->get(ino, read_buf);
+    if(off != 0){
+        r = ec->get(ino, read_buf);
+    }
     size_t read_string_size = read_buf.size();
     if(off >= read_string_size){
         write_buf.append(read_buf);
@@ -377,9 +370,8 @@ chfs_client::write(inum ino, size_t size, off_t off, const char *data,
         }
     }
     bytes_written = size;
-    std::cout << "size1: " << size << ' '<< off << std::endl;
     r = ec->put(ino, write_buf);  
-    /*
+     /*
      * your code goes here.
      * note: write using ec->put().
      * when off > length of original file, fill the holes with '\0'.
@@ -401,7 +393,6 @@ int chfs_client::unlink(inum parent,const char *name)
     ec->remove(ino_out);
     std::string entry = std::string(name) + '/' +  filename(ino_out) + '/';
     std::string::size_type pos = filename_inum.find(entry);
-    std::cout << filename_inum << pos << std::endl;
     filename_inum.replace(pos, entry.size(), "");
     ec->put(parent, filename_inum);
     /*
@@ -430,7 +421,6 @@ int chfs_client::symlink(inum parent, const char *linked_name, const char *name,
     r = ec->create(extent_protocol::T_Sym, ino_out);
     std::string new_pair = "";
     new_pair = std::string(name) + '/' + filename(ino_out) + '/';
-    std::cout << "pair " << new_pair;
     filename_inum.append(new_pair);
 
     r = ec->put(ino_out, std::string(linked_name));
