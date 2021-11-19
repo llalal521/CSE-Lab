@@ -33,6 +33,7 @@ main(int argc, char *argv[])
   server.reg(extent_protocol::remove, &ls, &extent_server::remove);
   server.reg(extent_protocol::create, &ls, &extent_server::create);
 
-  while(1)
+  while(1){
     sleep(1000);
+  }
 }

@@ -47,14 +47,64 @@ private:
 // Your code here -- RPC handlers for the worker to call.
 
 mr_protocol::status Coordinator::askTask(int, mr_protocol::AskTaskResponse &reply) {
-	// Lab2 : Your code goes here.
-
+	vector<string> filename;
+	vector<int> map_id;
+	if(!isFinishedMap()){
+		for(int i = 0; i < mapTasks.size(); ++i){
+			this->mtx.lock();
+			if(mapTasks[i].isAssigned == false){
+				mapTasks[i].isAssigned = true;
+				this->mtx.unlock();
+				cout << "assign map mission" << i << endl; 
+				reply.task_id = i;
+				filename.push_back(getFile(mapTasks[i].index));
+				cout << filename[0] << endl;
+				reply.filenames = filename;
+				reply.taskType = MAP;
+				return mr_protocol::OK;
+			}
+			this->mtx.unlock();
+		}
+	}
+	if(isFinishedMap() && !isFinishedReduce()){
+		for(int i = 0; i < reduceTasks.size(); ++i){
+			this->mtx.lock();
+			if(reduceTasks[i].isAssigned == false){
+				reduceTasks[i].isAssigned = true;
+				this->mtx.unlock();
+				cout << "reduce map mission" << i << endl; 
+				reply.taskType = REDUCE;
+				reply.task_id = i;
+				for(int j = 0; j < mapTasks.size(); ++j)
+					map_id.push_back(j);
+				reply.map_id = map_id;
+				return mr_protocol::OK;
+			}
+			this->mtx.unlock();
+		}
+	}
+	reply.taskType = NONE;
 	return mr_protocol::OK;
 }
 
 mr_protocol::status Coordinator::submitTask(int taskType, int index, bool &success) {
-	// Lab2 : Your code goes here.
-
+	if(taskType == MAP){
+		cout << "submit map task" << index << endl;
+		this->mtx.lock();
+		mapTasks[index].isCompleted = true;
+		success = true;
+		this->completedMapCount ++;
+		this->mtx.unlock();
+		return mr_protocol::OK;
+	}
+	if(taskType == REDUCE){
+		this->mtx.lock();
+		reduceTasks[index].isCompleted = true;
+		success = true;
+		this->completedReduceCount ++;
+		this->mtx.unlock();
+		return mr_protocol::OK;
+	}
 	return mr_protocol::OK;
 }
 
@@ -127,6 +177,8 @@ int main(int argc, char *argv[])
 	}
 	char *port_listen = argv[1];
 	
+	cout << "process begin" << endl;
+
 	setvbuf(stdout, NULL, _IONBF, 0);
 
 	char *count_env = getenv("RPC_COUNT");
@@ -145,10 +197,8 @@ int main(int argc, char *argv[])
 
 	Coordinator c(files, REDUCER_COUNT);
 	
-	//
-	// Lab2: Your code here.
-	// Hints: Register "askTask" and "submitTask" as RPC handlers here
-	// 
+	server.reg(mr_protocol::asktask, &c, &Coordinator::askTask);
+	server.reg(mr_protocol::submittask, &c, &Coordinator::submitTask); //similar to demo, register the handler function
 
 	while(!c.Done()) {
 		sleep(1);
