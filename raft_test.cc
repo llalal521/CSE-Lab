@@ -312,7 +312,7 @@ TEST_CASE(part2, backup, "Leader backs up quickly over incorrect follower logs")
 
     mssleep(500);
 
-	// bring original leader back to life,
+	// // bring original leader back to life,
     for (int i = 0; i < num_nodes; i++)
         group->disable_node(i);
     group->enable_node((leader1 + 0) % num_nodes);

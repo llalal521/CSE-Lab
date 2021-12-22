@@ -26,11 +26,14 @@ public:
 	};
 
 	struct AskTaskResponse {
-		// Lab2: Your definition here.
+		vector<string> filenames;
+		vector<int> map_id; //used to form the reduce file name
+		mr_tasktype taskType;
+		int task_id; //used to generate filename and sign finished tasks
 	};
 
 	struct AskTaskRequest {
-		// Lab2: Your definition here.
+		int id;
 	};
 
 	struct SubmitTaskResponse {
@@ -42,6 +45,38 @@ public:
 	};
 
 };
+
+inline marshall &
+operator<<(marshall &m, mr_protocol::AskTaskResponse res){
+	m << res.filenames;
+	m << res.task_id;
+	m << res.taskType;
+	m << res.map_id;
+	return m;
+} 
+
+inline unmarshall &
+operator>>(unmarshall &um, mr_protocol::AskTaskResponse &res){
+	int tmp;
+	um >> res.filenames;
+	um >> res.task_id;
+	um >> tmp;
+	um >> res.map_id;
+	res.taskType = (mr_tasktype)tmp;
+	return um;
+} 
+
+inline marshall &
+operator<<(marshall &m, mr_protocol::AskTaskRequest req){
+	m << req.id;
+	return m;
+}
+
+inline unmarshall &
+operator>>(unmarshall &um, mr_protocol::AskTaskRequest &req){
+	um >> req.id;
+	return um;
+}
 
 #endif
 

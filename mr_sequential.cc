@@ -28,6 +28,26 @@ vector<KeyVal> Map(const string &filename, const string &content)
 {
     // Your code goes here
     // Hints: split contents into an array of words.
+    vector<KeyVal> res;
+    string str="";
+    for(auto cont: content){
+        // come across the word terminal.
+        if((!isalpha(cont))&&(str!="")){
+            KeyVal keyval;
+            keyval.key=str;
+            keyval.val="1";
+            res.push_back(keyval);  
+            str="";
+        }
+        // cont is in alphabet
+        else if(isalpha(cont)){
+            str+=cont;
+        }
+        else{
+            continue;
+        }
+    }
+    return res;
 
 }
 
@@ -40,9 +60,17 @@ string Reduce(const string &key, const vector <string> &values)
 {
     // Your code goes here
     // Hints: return the number of occurrences of the word.
+    int sum=0;
+    for(auto value:values){
+        int tmp=0;
+        stringstream stream;
+        stream<<value;
+        stream>>tmp;
+        sum+=tmp;
+    }
+    return to_string(sum);
 
 }
-
 int main(int argc, char ** argv)
 {
     if (argc < 2) {
@@ -72,6 +100,7 @@ int main(int argc, char ** argv)
         intermediate.insert(intermediate.end(), KVA.begin(), KVA.end());
 
     }
+
 
     //
     // a big difference from real MapReduce is that all the

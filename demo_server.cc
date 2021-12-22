@@ -38,7 +38,6 @@ int main(int argc, char const *argv[])
 
     setvbuf(stdout, NULL, _IONBF, 0);
     setvbuf(stderr, NULL, _IONBF, 0);
-
     srandom(getpid());
 
     if(argc != 2){

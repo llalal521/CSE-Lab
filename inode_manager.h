@@ -4,7 +4,9 @@
 #define inode_h
 
 #include <stdint.h>
-#include "extent_protocol.h" // TODO: delete it
+#include <map> //To solve a syntax error
+#include "extent_protocol.h" // TODO: delete it?
+#include <bitset>
 
 #define DISK_SIZE  1024*1024*16
 #define BLOCK_SIZE 512
@@ -20,8 +22,8 @@ class disk {
 
  public:
   disk();
-  void read_block(uint32_t id, char *buf);
-  void write_block(uint32_t id, const char *buf);
+  void read_block(uint32_t id, char *buf, int size = BLOCK_SIZE);
+  void write_block(uint32_t id, const char *buf, int size = 0);
 };
 
 // block layer -----------------------------------------
@@ -35,20 +37,23 @@ typedef struct superblock {
 class block_manager {
  private:
   disk *d;
-  std::map <uint32_t, int> using_blocks;
+  std::map <uint32_t, int> using_blocks; //bitmap? In my opinion, int value is used to show the size used in the block
+
  public:
   block_manager();
   struct superblock sb;
-
   uint32_t alloc_block();
   void free_block(uint32_t id);
-  void read_block(uint32_t id, char *buf);
-  void write_block(uint32_t id, const char *buf);
+  void read_block(uint32_t id, char *buf, int size = BLOCK_SIZE);
+  void write_block(uint32_t id, const char *buf, int size = 0);
+  void write_busy_list();
 };
 
 // inode layer -----------------------------------------
 
 #define INODE_NUM  1024
+#define INODE_CHAR  INODE_NUM/8
+#define SHIFT_SIGN (unsigned char)0x80
 
 // Inodes per block.
 #define IPB           1
