@@ -89,6 +89,21 @@ public:
     virtual std::vector<char> snapshot() override;
     // Apply the snapshot to the state mahine.
     virtual void apply_snapshot(const std::vector<char>&) override;
+    std::string get(const std::string &key) {
+        return key_value[key];
+    }
+
+    void put(const std::string &key, const std::string &val) {
+        key_value[key] = val;
+    }
+
+    std::string del(const std::string &key) {
+        std::string val = get(key);
+        key_value.erase(key);
+        return val;
+    }
+private:
+    std::map<std::string, std::string> key_value;
 };
 
 #endif // raft_state_machine_h

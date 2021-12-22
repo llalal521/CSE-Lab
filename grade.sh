@@ -1,4 +1,4 @@
-#!/bin/bash
+!/bin/bash
 make clean &> /dev/null 2>&1
 echo "Building lab3 tests"
 make &> /dev/null 2>&1 
