@@ -11,6 +11,16 @@ public:
     int value;
 };
 
+class key_value { //used for undo log
+public:
+    int key;
+    int value;
+
+    key_value() {}
+
+    key_value(const key_value &pair) : key(pair.key), value(pair.value) {}
+};
+
 /**
  * Storage layer for each shard. Support fault tolerance.
  * */
@@ -25,6 +35,7 @@ public:
         this->node->reg(chdb_protocol::Put, this, &shard_client::put);
         this->node->reg(chdb_protocol::Get, this, &shard_client::get);
         // transaction related
+        this->node->reg(chdb_protocol::Begin, this, &shard_client::begin);
         this->node->reg(chdb_protocol::Prepare, this, &shard_client::prepare);
         this->node->reg(chdb_protocol::Commit, this, &shard_client::commit);
         this->node->reg(chdb_protocol::Rollback, this, &shard_client::rollback);
@@ -40,6 +51,10 @@ public:
 
     int dummy(chdb_protocol::operation_var var, int &r) {
         printf("Receive dummy Request! tx id:%d\n", var.tx_id);
+        printf("put key: %d, value: %d\n", var.key, var.value);
+        put(var, r);
+        get(var, r);
+        printf("get value: %d\n", r);
         r = var.tx_id;
         return 0;
     }
@@ -51,6 +66,8 @@ public:
     int prepare(chdb_protocol::prepare_var var, int &r);
 
     int commit(chdb_protocol::commit_var var, int &r);
+
+    int begin(chdb_protocol::operation_var var, int &r);
 
     /**
      * Execute rollback according to `undo_logs`
@@ -84,7 +101,11 @@ public:
     int view_server_port;
     bool active;
     rpc_node *node;
-    std::vector<std::map<int, value_entry>> store;
+    std::vector<std::map<int, value_entry> > store;
+    std::map<int, bool> commitSet;
+    std::map<int, bool> prepareSet;
+    std::map<int, std::map<int, value_entry *> > undos;
+    std::map<int, std::map<int, value_entry> > redos;
     int primary_replica = 0;
     int replica_num = 5;
 

@@ -99,6 +99,7 @@ public:
         assert(len > 0);
 
         for (auto offset: shards_offset) {
+            printf("unactive %d", shards[offset % len]->shard_id);
             shards[offset % len]->set_active(false);
         }
     }
@@ -125,6 +126,10 @@ public:
         return res;
     }
 
+    bool isActive(int offset){
+        return shards[offset]->active;
+    }
+
     view_server *vserver;
 
     std::vector<shard_client *> shards;
@@ -133,8 +138,9 @@ public:
 
 private:
     static int default_dispatch(const int key, int shard_num) {
-        int shard_offset = key % shard_num;
-        if (0 == shard_offset)++shard_offset;
+        int shard_offset = key % shard_num + 1;
+        //if (0 == shard_offset)  shard_offset = shard_num;
+        //printf("shard id %d", shard_offset);
         return shard_offset;
     }
 };

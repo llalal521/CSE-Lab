@@ -16,6 +16,7 @@ public:
         int key, value, tx_id;
         command_type tp;
 
+        bool succ;
         bool done;
         std::mutex mtx; // protect the struct
         std::condition_variable cv; // notify the caller
@@ -36,7 +37,10 @@ public:
 
 
     virtual int size() const override {
-        return sizeof(*this);
+        std::string keystring = std::to_string(key);
+        std::string valuestring = std::to_string(value);
+        std::string txstring = std::to_string(tx_id);
+        return sizeof(int) * 3 + 1 + 3 + 4 + 6;
     }
 
     virtual void serialize(char *buf, int size) const override;
@@ -65,4 +69,26 @@ public:
     // Apply the snapshot to the state mahine.
     // In Chdb, you don't need to implement this function
     virtual void apply_snapshot(const std::vector<char> &) {}
+
+    void put(int tx_id, int key, int value){
+        std::map<int, int> *tmp;
+        if(log.find(tx_id) != log.end()){
+            tmp = &log[tx_id];
+        }
+        else{
+            tmp = new std::map<int, int>();
+            log.insert(std::pair<int, std::map<int, int> >(tx_id, *tmp));
+        }
+        if(tmp->find(key) != tmp->begin()){
+            tmp->erase(key);
+        }
+        tmp->insert(std::pair<int, int>(key, value));
+    }
+
+    int get(int tx_id, int key){
+        return log[tx_id][key];
+    }
+
+private:
+    std::map<int, std::map<int, int> > log;
 };

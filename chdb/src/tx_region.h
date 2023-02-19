@@ -1,5 +1,12 @@
 #include "ch_db.h"
 
+class tx_lock{
+public:
+    int tx_id;
+    std::mutex *txlock ;
+
+    tx_lock(int id, std::mutex *tlock): tx_id(id), txlock(tlock){}
+};
 
 /*
  * tx_region: chdb KV client which supports transaction concurrency control.
@@ -7,7 +14,7 @@
 class tx_region {
 public:
     tx_region(chdb *db) : db(db),
-                          tx_id(db->next_tx_id()) {
+                          tx_id(db->next_tx_id()), hasput(false) {
         this->tx_begin();
     }
 
@@ -68,4 +75,7 @@ private:
 
     chdb *db;
     const int tx_id;
+
+    bool hasput;
+
 };

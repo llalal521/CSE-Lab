@@ -5,6 +5,7 @@ void tx_put_and_check(chdb *store) {
     int write_val = 15, key_upper_bound = 10;
     {
         tx_region db_client(store);
+        printf("begin ok");
         for (int key = 0; key < key_upper_bound; ++key) {
             db_client.put(key, write_val + key);
         }

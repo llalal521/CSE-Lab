@@ -11,6 +11,7 @@ namespace chdb_protocol {
         Get,
         /* Transaction related */
         Prepare,
+        Begin,
         CheckPrepareState,
         Commit,
         Rollback,

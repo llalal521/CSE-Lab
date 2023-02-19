@@ -57,6 +57,7 @@ TEST_CASE(part1, random_tx_abort, "Random choose shard to abort") {
     for (int i = 0; i < 10; ++i) {
         int num = static_cast<int>(random() % shard_num);
         deactive_shards.insert(num);
+        std::cout << "deactive: " << num + 1 << " " << std::endl; 
     }
     {
         store.set_shards_down(deactive_shards);
@@ -68,8 +69,10 @@ TEST_CASE(part1, random_tx_abort, "Random choose shard to abort") {
         for (int i = 0; i < 200; ++i) {
             int key = random();
             db_client.put(key, write_val + key);
-            if (deactive_shards.find(key % shard_num) != deactive_shards.end())
+            printf("put to %d", key % shard_num);
+            if (deactive_shards.find(key % shard_num) != deactive_shards.end()){
                 commit_succ = chdb_protocol::prepare_not_ok;
+            }
         }
         ASSERT(commit_succ == db_client.tx_can_commit(), "Transaction result not match");
     }
